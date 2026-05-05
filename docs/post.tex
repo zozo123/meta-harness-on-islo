@@ -43,8 +43,8 @@
   citecolor=accent,
   pdftitle={Meta-harness on Islo: a 200-line POC},
   pdfauthor={Yossi Eliaz (Incredibuild)},
-  pdfsubject={Meta-harness optimization loop wired onto Islo sandboxes},
-  pdfkeywords={meta-harness, islo, harbor, agent eval, harness optimization}
+  pdfsubject={Meta-harness optimization loop wired onto Islo sandboxes (islo.dev)},
+  pdfkeywords={meta-harness, islo, islo.dev, harbor, agent eval, harness optimization}
 }
 
 % --- Headings ---
@@ -133,7 +133,8 @@ compress prior runs into summary statistics; meta-harness gives the proposer
 up to 10M tokens of raw execution traces to \texttt{grep} through.
 
 That claim is only useful if the runtime can produce, store, and serve those
-traces cheaply. Which is exactly what Islo sandboxes already do.
+traces cheaply. Which is exactly what \href{https://islo.dev/}{Islo} sandboxes
+already do.
 
 % =================================================================
 \section*{The optimization loop, on Islo primitives}
@@ -516,7 +517,9 @@ Three obvious next steps:
 \small\color{dim}
 Code: \texttt{bin/meta-harness demo} to run it; \texttt{bin/meta-harness viz} to watch it.\\
 $\sim$600 lines including the dashboard, deliberately scrappy.\\[0.6em]
-\href{https://github.com/zozo123/meta-harness-eng-islo}{\texttt{github.com/zozo123/meta-harness-eng-islo}}\\[0.2em]
+\href{https://zozo123.github.io/meta-harness-on-islo-page/}{\texttt{zozo123.github.io/meta-harness-on-islo-page}} $\cdot$
+\href{https://github.com/zozo123/meta-harness-on-islo}{\texttt{github.com/zozo123/meta-harness-on-islo}}\\[0.3em]
+Built on \href{https://islo.dev/}{\texttt{islo.dev}}\\[0.3em]
 Yossi Eliaz $\cdot$ Incredibuild $\cdot$ Islo\\[0.1em]
 \texttt{yossi.eliaz@incredibuild.com} $\cdot$ \texttt{yossi@islo.dev}
 \end{center}

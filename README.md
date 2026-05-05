@@ -1,10 +1,12 @@
-# meta-harness-eng-islo
+# meta-harness-on-islo
 
-A ~200-line POC that wires the [meta-harness](https://yoonholee.com/meta-harness/) optimization loop onto Islo sandboxes. Goes from **0/5 to 5/5 in four proposer steps**, end-to-end, in about two seconds.
+A ~200-line POC that wires the [meta-harness](https://yoonholee.com/meta-harness/) optimization loop onto [Islo](https://islo.dev/) sandboxes. Goes from **0/5 to 5/5 in four proposer steps**, end-to-end, in about two seconds.
 
-> **Read the writeup** — [`docs/POST.md`](./docs/POST.md) (Markdown, paste into Substack) or [`docs/post.pdf`](./docs/post.pdf) (typeset, with diagrams and charts).
+> **Project page (with figures + PDF):** https://zozo123.github.io/meta-harness-on-islo-page/
 >
-> **Project page** — [zozo123/islo-sandbox-based-meta-harnessing-demo](https://github.com/zozo123/islo-sandbox-based-meta-harnessing-demo) (paper-style website).
+> **Writeup:** [`docs/POST.md`](./docs/POST.md) (Markdown) or [`docs/post.pdf`](./docs/post.pdf) (typeset, with diagrams and charts).
+>
+> **Built on:** [islo.dev](https://islo.dev/) — agent-sandbox infrastructure with snapshots, gateway egress controls, and native [Harbor](https://github.com/islo-labs/harbor) integration.
 
 ![architecture](docs/figures/architecture.png)
 
