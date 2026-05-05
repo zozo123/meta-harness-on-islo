@@ -154,13 +154,13 @@ traces cheaply. Which is exactly what Islo sandboxes already do.
   lbl/.style={font=\scriptsize\itshape, color=dim, fill=white, inner sep=2pt},
 ]
 % Top row: harness ──► snapshot ──► eval
-\node[store] (harness) at (0,0)   {\textbf{harness/v\textit{N}}\\[-1pt]\footnotesize system.md};
-\node[proc]  (snap)    at (5,0)   {\textbf{Snapshot}\\[-1pt]\footnotesize\texttt{islo snapshot save}};
-\node[proc]  (eval)    at (10.3,0){\textbf{Eval (parallel)}\\[-1pt]\footnotesize\texttt{islo use -{}-snapshot}};
+\node[store] (harness) at (0,0)    {\textbf{harness/v\textit{N}}\\[-1pt]\footnotesize system.md};
+\node[proc]  (snap)    at (5.4,0)  {\textbf{Snapshot}\\[-1pt]\footnotesize\texttt{islo snapshot save}};
+\node[proc]  (eval)    at (11.0,0) {\textbf{Eval (parallel)}\\[-1pt]\footnotesize\texttt{islo use -{}-snapshot}};
 
 % Bottom row: proposer ◄── runs
-\node[proc]  (prop)    at (0,-2.6)  {\textbf{Proposer}\\[-1pt]\footnotesize Claude reads \texttt{runs/}};
-\node[store] (runs)    at (10.3,-2.6){\textbf{runs/}\\[-1pt]\footnotesize stdout, stderr, traces};
+\node[proc]  (prop)    at (0,-2.8)    {\textbf{Proposer}\\[-1pt]\footnotesize Claude reads \texttt{runs/}};
+\node[store] (runs)    at (11.0,-2.8) {\textbf{runs/}\\[-1pt]\footnotesize stdout, stderr, traces};
 
 % Top arrows
 \draw[flow] (harness.east) -- node[lbl,above]{fork from base}             (snap.west);

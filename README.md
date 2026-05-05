@@ -2,7 +2,11 @@
 
 A ~200-line POC that wires the [meta-harness](https://yoonholee.com/meta-harness/) optimization loop onto Islo sandboxes. Goes from **0/5 to 5/5 in four proposer steps**, end-to-end, in about two seconds.
 
-> **Read the writeup** — [`POST.md`](./POST.md) (Markdown) or [`post.pdf`](./post.pdf) (typeset, with diagrams and charts).
+> **Read the writeup** — [`docs/POST.md`](./docs/POST.md) (Markdown, paste into Substack) or [`docs/post.pdf`](./docs/post.pdf) (typeset, with diagrams and charts).
+>
+> **Project page** — [zozo123/islo-sandbox-based-meta-harnessing-demo](https://github.com/zozo123/islo-sandbox-based-meta-harnessing-demo) (paper-style website).
+
+![architecture](docs/figures/architecture.png)
 
 ---
 
@@ -16,6 +20,9 @@ bin/meta-harness viz             # serve the live dashboard
 
 You should see the loop progress **0/5 → 2/5 → 3/5 → 4/5 → 5/5** in 4 proposer steps and converge.
 
+![results](docs/figures/bar-chart.png)
+![heatmap](docs/figures/heatmap.png)
+
 ## Layout
 
 ```
@@ -27,8 +34,12 @@ bin/agent-sim.py      deterministic offline agent stand-in
 bin/proposer.py       reads runs/, emits next harness version
 viz/index.html        single-file dashboard (timeline + heatmap + trace inspector)
 runs/                 populated by the loop; runs/state.json drives the dashboard
-post.tex / post.pdf   typeset writeup with diagrams
-POST.md               Markdown writeup (paste into Substack)
+docs/post.tex         LaTeX source for the writeup
+docs/post.pdf         compiled writeup with diagrams
+docs/POST.md          Markdown writeup (paste into Substack)
+docs/figures.tex      LaTeX source for individual figures
+docs/figures/*.png    PNG exports for blog embedding
+Makefile              `make demo`, `make viz`, `make pdf`, `make figures`
 ```
 
 ## Subcommands
@@ -85,18 +96,24 @@ Output contract is the same: a new `harness/v{N+1}/system.md` directory.
 
 The `tasks/<name>/` shape is `prompt.md` + `grade.sh`. To run [Harbor](https://github.com/islo-labs/harbor) tasks, write a small adapter that materializes each Harbor task into that shape inside the snapshot. The orchestrator and dashboard need no changes.
 
-## Building the PDF
+## Building the writeup and figures
 
 ```bash
-pdflatex -interaction=nonstopmode post.tex
-pdflatex -interaction=nonstopmode post.tex   # second pass for hyperref
+make pdf       # docs/post.pdf
+make figures   # docs/figures/*.png
 ```
+
+Both targets live in the [`Makefile`](./Makefile).
 
 ## Notes
 
 - 10-iter cap is hard-coded (`ITER_CAP=10` in `bin/meta-harness`).
 - The dashboard polls `runs/state.json` every 2s; safe to leave open while looping.
 - Wipe `runs/` and `harness/v[1-9]*` to reset.
+
+## License
+
+MIT — see [`LICENSE`](./LICENSE).
 
 ---
 
