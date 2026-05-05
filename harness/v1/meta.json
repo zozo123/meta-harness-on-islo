@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "parent": "v0",
+  "rationale": "Diagnostic from iter-0: 'fizzbuzz' failed; added a hint targeting that failure.",
+  "diagnostic_basis": [
+    "fizzbuzz",
+    "palindrome",
+    "primes",
+    "reverse",
+    "sum-evens"
+  ],
+  "added_hint": "Loops are 1-indexed: count from 1 through N inclusive.",
+  "target_task": "fizzbuzz",
+  "created": "2026-05-05T07:53:09.932981+00:00"
+}

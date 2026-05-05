@@ -1,0 +1,12 @@
+{
+  "version": "v3",
+  "parent": "v2",
+  "rationale": "Diagnostic from iter-2: 'reverse' failed; added a hint targeting that failure.",
+  "diagnostic_basis": [
+    "palindrome",
+    "reverse"
+  ],
+  "added_hint": "When asked for separated values, use space-separated output.",
+  "target_task": "reverse",
+  "created": "2026-05-05T07:53:10.796442+00:00"
+}

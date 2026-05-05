@@ -1,0 +1,13 @@
+{
+  "version": "v2",
+  "parent": "v1",
+  "rationale": "Diagnostic from iter-1: 'primes' failed; added a hint targeting that failure.",
+  "diagnostic_basis": [
+    "palindrome",
+    "primes",
+    "reverse"
+  ],
+  "added_hint": "The smallest prime is 2 \u2014 1 is not prime.",
+  "target_task": "primes",
+  "created": "2026-05-05T07:53:10.404893+00:00"
+}

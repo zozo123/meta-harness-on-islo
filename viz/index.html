@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Meta-Harness · Islo POC</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #161b22;
+    --panel-2: #1f2630;
+    --border: #2a313c;
+    --text: #e6edf3;
+    --dim: #8b949e;
+    --pass: #3fb950;
+    --fail: #f85149;
+    --skip: #484f58;
+    --accent: #58a6ff;
+    --accent-2: #d2a8ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  header {
+    padding: 16px 24px; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header h1 .accent { color: var(--accent-2); }
+  header .meta { color: var(--dim); font-size: 12px; }
+  main { padding: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 1024px) { main { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 6px; padding: 16px;
+  }
+  .card h2 { margin: 0 0 12px; font-size: 13px; color: var(--dim);
+    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+
+  /* Score timeline (sparkline-ish bars) */
+  .timeline { display: flex; gap: 6px; align-items: flex-end; height: 140px;
+    padding: 8px 0 4px; border-bottom: 1px solid var(--border); }
+  .bar {
+    flex: 1; background: var(--panel-2); border-radius: 2px 2px 0 0;
+    position: relative; cursor: pointer; min-width: 24px;
+    transition: opacity 0.15s;
+  }
+  .bar .fill {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: linear-gradient(180deg, var(--accent), var(--pass));
+    border-radius: 2px 2px 0 0;
+    transition: height 0.4s cubic-bezier(.2,.8,.2,1);
+  }
+  .bar.zero .fill { background: var(--skip); }
+  .bar:hover { opacity: 0.85; }
+  .bar.selected { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+  .bar .label { position: absolute; bottom: -22px; left: 0; right: 0;
+    text-align: center; color: var(--dim); font-size: 11px; }
+  .bar .score-text {
+    position: absolute; top: -22px; left: 0; right: 0;
+    text-align: center; font-size: 11px; color: var(--text);
+  }
+
+  /* Heatmap */
+  .heatmap { display: grid; grid-template-columns: 80px repeat(var(--cols), 1fr); gap: 4px; }
+  .heatmap .corner, .heatmap .col-h, .heatmap .row-h { color: var(--dim); font-size: 11px; }
+  .heatmap .col-h { text-align: center; padding: 4px 0; }
+  .heatmap .row-h { padding: 6px 8px; text-align: right; white-space: nowrap; }
+  .cell {
+    aspect-ratio: 1; border-radius: 3px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 600; color: var(--bg);
+    transition: transform 0.1s;
+  }
+  .cell.pass { background: var(--pass); }
+  .cell.fail { background: var(--fail); }
+  .cell.skip { background: var(--skip); opacity: 0.4; }
+  .cell:hover { transform: scale(1.08); }
+  .cell.selected { outline: 2px solid var(--accent-2); outline-offset: 1px; }
+
+  .legend { display: flex; gap: 14px; margin-top: 12px; color: var(--dim); font-size: 12px; }
+  .legend .swatch { display: inline-block; width: 12px; height: 12px;
+    border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+
+  /* Rationale + diff */
+  .rationale { color: var(--text); font-size: 13px; }
+  .rationale .v { color: var(--accent-2); font-weight: 600; }
+  .rationale .from { color: var(--dim); }
+  .system-prompt {
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 4px; padding: 10px 12px; margin-top: 8px;
+    white-space: pre-wrap; max-height: 300px; overflow: auto;
+    font-size: 12px;
+  }
+  .system-prompt .added { background: rgba(63, 185, 80, 0.18); color: #aff5b4; }
+
+  /* Trace inspector */
+  .trace { display: grid; grid-template-rows: auto 1fr; gap: 8px; }
+  .trace-meta { color: var(--dim); font-size: 12px; }
+  .trace-meta .task { color: var(--text); font-weight: 600; }
+  .trace-meta .status.pass { color: var(--pass); }
+  .trace-meta .status.fail { color: var(--fail); }
+  .trace-out, .trace-err {
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 4px; padding: 10px 12px; margin-top: 4px;
+    white-space: pre-wrap; font-size: 12px; max-height: 220px; overflow: auto;
+  }
+  .trace-err { color: #ffa198; }
+  .trace-section-label { color: var(--dim); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.05em; margin-top: 8px; }
+
+  .empty { color: var(--dim); font-style: italic; padding: 20px 0; text-align: center; }
+  footer { padding: 16px 24px; color: var(--dim); font-size: 11px; text-align: center;
+    border-top: 1px solid var(--border); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Meta-Harness <span class="accent">·</span> Islo POC</h1>
+  <span class="meta" id="status">loading…</span>
+</header>
+
+<main>
+  <section class="card" style="grid-column: 1 / -1;">
+    <h2>Pass rate per iteration</h2>
+    <div class="timeline" id="timeline"></div>
+    <div class="legend">
+      <span><span class="swatch" style="background:linear-gradient(180deg,var(--accent),var(--pass))"></span>passing tasks</span>
+      <span><span class="swatch" style="background:var(--skip)"></span>0 passing</span>
+      <span style="margin-left:auto" id="convergence"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Task × Iteration heatmap</h2>
+    <div class="heatmap" id="heatmap"></div>
+    <div class="legend">
+      <span><span class="swatch" style="background:var(--pass)"></span>pass</span>
+      <span><span class="swatch" style="background:var(--fail)"></span>fail</span>
+      <span><span class="swatch" style="background:var(--skip);opacity:0.4"></span>skip</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Selected harness</h2>
+    <div class="rationale" id="rationale"><span class="empty">click a bar or cell</span></div>
+    <div class="trace-section-label">system.md</div>
+    <div class="system-prompt" id="systemPrompt"></div>
+  </section>
+
+  <section class="card" style="grid-column: 1 / -1;">
+    <h2>Trace inspector</h2>
+    <div class="trace" id="trace"><div class="empty">click a heatmap cell to see stdout/stderr from that run</div></div>
+  </section>
+</main>
+
+<footer>
+  Auto-refreshes every 2s · runs/state.json · <a href="https://yoonholee.com/meta-harness/" target="_blank">meta-harness concept</a> · <a href="https://docs.islo.dev/" target="_blank">islo.dev</a>
+</footer>
+
+<script>
+let state = null;
+let selected = { iter: null, task: null };
+
+async function poll() {
+  try {
+    const r = await fetch('runs/state.json?_=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
+    const newState = await r.json();
+    if (JSON.stringify(newState) !== JSON.stringify(state)) {
+      state = newState;
+      render();
+    }
+    document.getElementById('status').textContent =
+      `${state.iterations.length} iterations · ${state.tasks.length} tasks · live`;
+  } catch (e) {
+    document.getElementById('status').textContent = 'no state.json yet · run `bin/meta-harness demo`';
+  }
+}
+
+function render() {
+  if (!state || !state.iterations.length) return;
+  renderTimeline();
+  renderHeatmap();
+  renderSelected();
+  renderTrace();
+}
+
+function renderTimeline() {
+  const el = document.getElementById('timeline');
+  const total = state.tasks.length;
+  el.innerHTML = '';
+  state.iterations.forEach(it => {
+    const pct = total ? (it.pass_rate / total) * 100 : 0;
+    const bar = document.createElement('div');
+    bar.className = 'bar' + (pct === 0 ? ' zero' : '') + (selected.iter === it.iter ? ' selected' : '');
+    bar.title = `iter ${it.iter} (${it.harness}): ${it.pass_rate}/${total}`;
+    bar.innerHTML = `
+      <span class="score-text">${it.pass_rate}/${total}</span>
+      <div class="fill" style="height:${Math.max(pct, 2)}%"></div>
+      <span class="label">${it.harness}</span>`;
+    bar.onclick = () => { selected.iter = it.iter; selected.task = null; render(); };
+    el.appendChild(bar);
+  });
+  // Convergence indicator
+  const last = state.iterations[state.iterations.length - 1];
+  const conv = document.getElementById('convergence');
+  if (last.pass_rate === total && total > 0) {
+    conv.innerHTML = `<span style="color:var(--pass)">✓ converged at ${last.harness}</span>`;
+  } else {
+    conv.innerHTML = '';
+  }
+}
+
+function renderHeatmap() {
+  const el = document.getElementById('heatmap');
+  el.innerHTML = '';
+  el.style.setProperty('--cols', state.iterations.length);
+  // header row: blank + iter labels
+  const corner = document.createElement('div');
+  corner.className = 'corner';
+  el.appendChild(corner);
+  state.iterations.forEach(it => {
+    const h = document.createElement('div');
+    h.className = 'col-h';
+    h.textContent = it.harness;
+    el.appendChild(h);
+  });
+  // task rows
+  state.tasks.forEach(task => {
+    const rh = document.createElement('div');
+    rh.className = 'row-h';
+    rh.textContent = task;
+    el.appendChild(rh);
+    state.iterations.forEach(it => {
+      const t = (it.tasks || []).find(x => x.task === task);
+      const status = t ? t.status : 'skip';
+      const cell = document.createElement('div');
+      cell.className = 'cell ' + status +
+        (selected.iter === it.iter && selected.task === task ? ' selected' : '');
+      cell.textContent = status === 'pass' ? '✓' : status === 'fail' ? '✗' : '·';
+      cell.title = `${task} @ ${it.harness}: ${status}`;
+      cell.onclick = () => { selected.iter = it.iter; selected.task = task; render(); };
+      el.appendChild(cell);
+    });
+  });
+}
+
+function renderSelected() {
+  const el = document.getElementById('rationale');
+  const sp = document.getElementById('systemPrompt');
+  if (selected.iter == null) {
+    el.innerHTML = '<span class="empty">click a bar or cell</span>';
+    sp.textContent = '';
+    return;
+  }
+  const it = state.iterations.find(x => x.iter === selected.iter);
+  if (!it) return;
+  el.innerHTML = `
+    <span class="v">${it.harness}</span>
+    ${it.parent ? `<span class="from"> (from ${it.parent})</span>` : ''}
+    · score ${it.pass_rate}/${it.total}<br>
+    <span style="color:var(--dim)">${escape(it.rationale || '')}</span>`;
+  // Highlight added section in system.md
+  fetch(`harness/${it.harness}/system.md?_=` + Date.now(), { cache: 'no-store' })
+    .then(r => r.text()).then(t => {
+      sp.innerHTML = highlightAdded(t);
+    }).catch(() => { sp.textContent = '(could not load system.md)'; });
+}
+
+function highlightAdded(text) {
+  // Highlight the most recent "## Added in vN" block.
+  const re = /(\n## Added in v\d+[^\n]*\n[\s\S]*?)(?=\n## Added in v\d+|\n*$)/g;
+  let lastMatch = null, m;
+  while ((m = re.exec(text)) !== null) lastMatch = m;
+  if (!lastMatch) return escape(text);
+  const before = text.slice(0, lastMatch.index);
+  const added = lastMatch[0];
+  const after = text.slice(lastMatch.index + added.length);
+  return escape(before) + `<span class="added">${escape(added)}</span>` + escape(after);
+}
+
+function renderTrace() {
+  const el = document.getElementById('trace');
+  if (selected.iter == null || selected.task == null) {
+    el.innerHTML = '<div class="empty">click a heatmap cell to see stdout/stderr from that run</div>';
+    return;
+  }
+  const it = state.iterations.find(x => x.iter === selected.iter);
+  const t = it.tasks.find(x => x.task === selected.task);
+  if (!t) { el.innerHTML = '<div class="empty">no run for this cell</div>'; return; }
+  const path = `runs/iter-${it.iter}/${t.task}`;
+  Promise.all([
+    fetch(`${path}/stdout?_=` + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.text() : '').catch(() => ''),
+    fetch(`${path}/stderr?_=` + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.text() : '').catch(() => ''),
+  ]).then(([stdout, stderr]) => {
+    el.innerHTML = `
+      <div class="trace-meta">
+        <span class="task">${escape(t.task)}</span> @ <span style="color:var(--accent-2)">${escape(it.harness)}</span>
+        · <span class="status ${t.status}">${t.status}</span>
+        · <span style="color:var(--dim)">${escape(path)}</span>
+      </div>
+      <div>
+        <div class="trace-section-label">stdout</div>
+        <div class="trace-out">${escape(stdout) || '<span style="color:var(--dim)">(empty)</span>'}</div>
+        <div class="trace-section-label">stderr (grade.sh diagnostic)</div>
+        <div class="trace-err">${escape(stderr) || '<span style="color:var(--dim)">(empty)</span>'}</div>
+      </div>`;
+  });
+}
+
+function escape(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+setInterval(poll, 2000);
+poll();
+</script>
+</body>
+</html>

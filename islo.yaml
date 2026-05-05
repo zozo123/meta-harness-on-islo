@@ -1,0 +1,14 @@
+version: 1
+name: meta-harness-poc
+description: POC meta-harness optimization loop on Islo sandboxes
+
+resources:
+  cpus: 2
+  memory: 2048
+
+tools:
+  python: "3.12"
+  uv: latest
+
+env:
+  META_HARNESS_POC: "1"

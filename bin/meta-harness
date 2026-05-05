@@ -1,0 +1,256 @@
+#!/usr/bin/env bash
+# meta-harness: tiny POC orchestrator for a meta-harness optimization loop.
+#
+# Subcommands:
+#   eval <harness>           Run all tasks against a harness version, writing runs/<harness>/...
+#   propose                  Inspect latest iter, emit next harness vN+1 (echoes new version)
+#   loop [N]                 eval + propose up to N iterations (default 5, hard cap 10)
+#   viz                      Serve viz/ on http://localhost:8765
+#   demo                     Run loop with a fresh runs/ dir, then print viz hint
+#   snapshot-base            Real-islo wiring: prepare a base sandbox + snapshot it
+#   eval-islo <harness>      Real-islo wiring: run tasks in parallel sandboxes from snapshot
+#   help
+#
+# Backend: BACKEND env var = sim (default) | islo. sim is offline, deterministic, fast.
+# islo backend assumes 'islo' in PATH and an active session.
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+RUNS="$ROOT/runs"
+VIZ="$ROOT/viz"
+TASKS_DIR="$ROOT/tasks"
+HARNESS_DIR="$ROOT/harness"
+ITER_CAP=10
+BACKEND="${BACKEND:-sim}"
+SNAPSHOT_NAME="${ISLO_SNAPSHOT:-meta-harness-base}"
+
+c_red=$'\033[31m'; c_grn=$'\033[32m'; c_yel=$'\033[33m'; c_dim=$'\033[2m'; c_bld=$'\033[1m'; c_off=$'\033[0m'
+
+log()  { printf '%s[meta]%s %s\n' "$c_dim" "$c_off" "$*" >&2; }
+warn() { printf '%s[meta] %s%s\n' "$c_yel" "$*" "$c_off" >&2; }
+die()  { printf '%s[meta] %s%s\n' "$c_red" "$*" "$c_off" >&2; exit 1; }
+
+usage() { sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; }
+
+list_tasks() { (cd "$TASKS_DIR" && ls -1d */ 2>/dev/null | sed 's|/$||' | sort); }
+
+# Run a single task with the chosen backend. Writes:
+#   runs/<harness>/<task>/{stdout,stderr,result.json}
+# Returns 0 on pass, non-zero on fail.
+run_task() {
+  local harness="$1" task="$2"
+  local out_dir="$RUNS/$harness/$task"
+  mkdir -p "$out_dir"
+  local h="$HARNESS_DIR/$harness" t="$TASKS_DIR/$task"
+  local started_at finished_at exit_code=0
+  started_at="$(date -u +%FT%TZ)"
+
+  if [[ "$BACKEND" == "sim" ]]; then
+    # Simulator: deterministic, runs locally.
+    if python3 "$ROOT/bin/agent-sim.py" "$h" "$t" >"$out_dir/stdout" 2>"$out_dir/agent.stderr"; then
+      :
+    else
+      exit_code=$?
+    fi
+  elif [[ "$BACKEND" == "islo" ]]; then
+    # Real-islo: each task runs in its own sandbox forked from snapshot.
+    # The agent reads /workspace/harness/<v>/system.md + /workspace/tasks/<task>/prompt.md
+    # and prints the answer to stdout.
+    local sb="mh-${harness}-${task}"
+    islo use "$sb" --snapshot "$SNAPSHOT_NAME" \
+      --agent claude \
+      --task "Read /workspace/harness/$harness/system.md as your system prompt, then read /workspace/tasks/$task/prompt.md and output ONLY the answer to stdout. No commentary." \
+      -- bash -c 'cat /tmp/agent-stdout 2>/dev/null || true' \
+      >"$out_dir/stdout" 2>"$out_dir/agent.stderr" || exit_code=$?
+  else
+    die "unknown BACKEND: $BACKEND"
+  fi
+
+  # Grade
+  local pass=false
+  if bash "$t/grade.sh" <"$out_dir/stdout" 2>"$out_dir/stderr"; then
+    pass=true
+  fi
+  finished_at="$(date -u +%FT%TZ)"
+
+  cat >"$out_dir/result.json" <<JSON
+{
+  "harness": "$harness",
+  "task": "$task",
+  "backend": "$BACKEND",
+  "pass": $pass,
+  "exit_code": $exit_code,
+  "started_at": "$started_at",
+  "finished_at": "$finished_at"
+}
+JSON
+
+  if $pass; then
+    printf '  %s✓%s %-12s\n' "$c_grn" "$c_off" "$task"
+    return 0
+  else
+    printf '  %s✗%s %-12s %s\n' "$c_red" "$c_off" "$task" "$(head -1 "$out_dir/stderr" 2>/dev/null || true)"
+    return 1
+  fi
+}
+
+cmd_eval() {
+  local harness="${1:-}"
+  [[ -n "$harness" ]] || die "usage: meta-harness eval <harness>"
+  [[ -d "$HARNESS_DIR/$harness" ]] || die "no such harness: $harness"
+  log "eval harness=$harness backend=$BACKEND"
+  local pass=0 fail=0
+  for t in $(list_tasks); do
+    if run_task "$harness" "$t"; then ((pass++)); else ((fail++)); fi
+  done
+  printf '%s[eval]%s %s: %d/%d passed\n' "$c_bld" "$c_off" "$harness" "$pass" "$((pass+fail))" >&2
+  rebuild_state
+}
+
+cmd_propose() {
+  python3 "$ROOT/bin/proposer.py" "$ROOT" "$(latest_harness)"
+}
+
+latest_harness() {
+  ls -1d "$HARNESS_DIR"/v* 2>/dev/null \
+    | awk -F/ '{print $NF}' \
+    | sed 's/^v//' \
+    | sort -n \
+    | tail -1 \
+    | sed 's/^/v/'
+}
+
+# runs/ is keyed by harness version, but the dashboard wants iter-* layout
+# for clarity. We mirror runs/<harness>/* into runs/iter-N/* on each rebuild.
+rebuild_state() {
+  python3 - "$ROOT" <<'PY'
+import json, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+runs = root / "runs"
+runs.mkdir(exist_ok=True)
+harnesses = sorted([d for d in (root/"harness").iterdir() if d.is_dir()],
+                   key=lambda p: int(p.name.lstrip("v")))
+state = {"iterations": [], "tasks": sorted([d.name for d in (root/"tasks").iterdir() if d.is_dir()])}
+for i, h in enumerate(harnesses):
+    iter_dir = runs / f"iter-{i}"
+    iter_dir.mkdir(exist_ok=True)
+    h_runs = runs / h.name
+    if not h_runs.exists():
+        continue
+    iter_entry = {"iter": i, "harness": h.name, "tasks": []}
+    for task in state["tasks"]:
+        td = h_runs / task
+        if not td.exists():
+            iter_entry["tasks"].append({"task": task, "status": "skip"})
+            continue
+        # Mirror into iter-N for dashboard simplicity.
+        dest = iter_dir / task
+        dest.mkdir(exist_ok=True)
+        for f in ("stdout", "stderr", "agent.stderr", "result.json"):
+            src = td / f
+            if src.exists():
+                (dest / f).write_text(src.read_text())
+        result = json.loads((td/"result.json").read_text()) if (td/"result.json").exists() else {}
+        stderr = (td/"stderr").read_text() if (td/"stderr").exists() else ""
+        stdout = (td/"stdout").read_text() if (td/"stdout").exists() else ""
+        iter_entry["tasks"].append({
+            "task": task,
+            "status": "pass" if result.get("pass") else "fail",
+            "stderr_head": stderr.splitlines()[0] if stderr else "",
+            "stdout_preview": stdout[:200],
+        })
+    iter_entry["pass_rate"] = sum(1 for t in iter_entry["tasks"] if t["status"]=="pass")
+    iter_entry["total"] = sum(1 for t in iter_entry["tasks"] if t["status"]!="skip")
+    meta = json.loads((h/"meta.json").read_text()) if (h/"meta.json").exists() else {}
+    iter_entry["rationale"] = meta.get("rationale", "")
+    iter_entry["parent"] = meta.get("parent")
+    state["iterations"].append(iter_entry)
+(runs/"state.json").write_text(json.dumps(state, indent=2))
+print(f"[state] wrote {runs/'state.json'} ({len(state['iterations'])} iters)", file=sys.stderr)
+PY
+}
+
+cmd_loop() {
+  local n="${1:-5}"
+  if (( n > ITER_CAP )); then
+    warn "capping at $ITER_CAP iterations (POC limit)"
+    n=$ITER_CAP
+  fi
+  local cur="$(latest_harness)"
+  [[ -n "$cur" ]] || die "no harness/v* found; create harness/v0 first"
+  log "loop start: cur=$cur, max_iters=$n"
+
+  for ((i=0; i<n; i++)); do
+    cur="$(latest_harness)"
+    printf '\n%s── iter %d  harness=%s ──%s\n' "$c_bld" "$i" "$cur" "$c_off" >&2
+    cmd_eval "$cur"
+    local nxt
+    nxt="$(cmd_propose 2>/dev/null || true)"
+    if [[ "$nxt" == "CONVERGED" ]]; then
+      log "converged at $cur — all tasks passing"
+      return 0
+    elif [[ "$nxt" == "STUCK" || -z "$nxt" ]]; then
+      warn "proposer could not improve harness — stopping"
+      return 0
+    else
+      log "proposed $nxt"
+    fi
+  done
+  log "loop done after $n iterations (cur=$(latest_harness))"
+}
+
+cmd_viz() {
+  rebuild_state
+  # Serve from repo root so the dashboard can read runs/, harness/ via relative paths.
+  # We symlink viz/index.html to / via a redirect served by Python; simpler: just
+  # tell the user the URL.
+  log "serving repo on http://localhost:8765 — open http://localhost:8765/viz/"
+  cd "$ROOT"
+  exec python3 -m http.server 8765 --bind 127.0.0.1
+}
+
+cmd_demo() {
+  log "fresh demo: clearing runs/ and any harness/v* > v0"
+  rm -rf "$RUNS"
+  for d in "$HARNESS_DIR"/v*; do
+    [[ -d "$d" ]] || continue
+    [[ "$(basename "$d")" == "v0" ]] && continue
+    rm -rf "$d"
+  done
+  cmd_loop 10
+  printf '\n%sDemo complete.%s Run %smeta-harness viz%s and open http://localhost:8765\n' \
+    "$c_bld" "$c_off" "$c_grn" "$c_off"
+}
+
+cmd_snapshot_base() {
+  log "preparing base sandbox: $SNAPSHOT_NAME"
+  islo use "$SNAPSHOT_NAME" --source "github://$(git_repo_or_local)" -- \
+    bash -c 'echo prepared && python3 --version && ls /workspace'
+  islo snapshot save "$SNAPSHOT_NAME"
+  log "snapshot saved as $SNAPSHOT_NAME"
+}
+
+git_repo_or_local() { echo "islo-labs/meta-harness-poc:main"; }   # placeholder
+
+cmd_eval_islo() {
+  BACKEND=islo cmd_eval "$@"
+}
+
+main() {
+  local cmd="${1:-help}"; shift || true
+  case "$cmd" in
+    eval)          cmd_eval "$@" ;;
+    propose)       cmd_propose ;;
+    loop)          cmd_loop "$@" ;;
+    viz)           cmd_viz ;;
+    demo)          cmd_demo ;;
+    snapshot-base) cmd_snapshot_base ;;
+    eval-islo)     cmd_eval_islo "$@" ;;
+    help|-h|--help) usage ;;
+    *)             usage; exit 2 ;;
+  esac
+}
+
+main "$@"

@@ -1,0 +1,11 @@
+{
+  "version": "v4",
+  "parent": "v3",
+  "rationale": "Diagnostic from iter-3: 'palindrome' failed; added a hint targeting that failure.",
+  "diagnostic_basis": [
+    "palindrome"
+  ],
+  "added_hint": "Format constraints are exact-case \u2014 produce all lowercase only when required.",
+  "target_task": "palindrome",
+  "created": "2026-05-05T07:53:11.185162+00:00"
+}
